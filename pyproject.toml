@@ -1,0 +1,17 @@
+[project]
+name = "ml-research-assistant"
+version = "0.1.0"
+description = "RAG-based ML Research Assistant over arXiv using Weaviate Cloud"
+requires-python = ">=3.10"
+
+dependencies = [
+  "datasets",
+  "sentence-transformers",
+  "weaviate-client>=4.16.4,<5",
+  "python-dotenv",
+  "streamlit",
+  "tqdm",
+  "numpy",
+  "pandas",
+  "requests",
+]

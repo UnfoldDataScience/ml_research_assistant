@@ -1,0 +1,9 @@
+datasets==2.21.0
+sentence-transformers==3.0.1
+weaviate-client==4.6.3
+openai==1.45.0
+python-dotenv==1.0.1
+streamlit==1.38.0
+tqdm==4.66.5
+numpy==1.26.4
+pandas==2.2.2
