@@ -4,21 +4,21 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("E:/YTReusable/.env",override=True)
 
 
 @dataclass
 class DatasetConfig:
     hf_name: str = "scientific_papers"
     hf_config: str = "arxiv"
-    max_papers: int = 5  # tweak for cost/runtime
+    max_papers: int = 50  # tweak for cost/runtime
 
 
 @dataclass
 class ChunkingConfig:
     chunk_size_tokens: int = 300
     chunk_overlap_tokens: int = 50
-    # Session 2: add flags for semantic chunking here
+    strategy: str = "semantic"  # Options: "fixed_size", "sentence_based", "semantic"
 
 
 @dataclass

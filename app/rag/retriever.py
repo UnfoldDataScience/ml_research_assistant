@@ -34,6 +34,7 @@ class Retriever:
                     "chunk_text": props["chunk_text"],
                     "start_token": props["start_token"],
                     "end_token": props["end_token"],
+                    "chunking_strategy": props.get("chunking_strategy", "fixed_size"),
                     "score": o.metadata.distance,  # smaller is closer
                 }
             )

@@ -54,6 +54,7 @@ def ensure_schema(client: weaviate.WeaviateClient) -> None:
             Property(name="chunk_text", data_type=DataType.TEXT),
             Property(name="start_token", data_type=DataType.INT),
             Property(name="end_token", data_type=DataType.INT),
+            Property(name="chunking_strategy", data_type=DataType.TEXT),
         ],
     )
 
@@ -92,6 +93,7 @@ def index_chunks(
                         "chunk_text": chunk["chunk_text"],
                         "start_token": chunk["start_token"],
                         "end_token": chunk["end_token"],
+                        "chunking_strategy": chunk.get("chunking_strategy", "fixed_size"),
                     },
                     vector=vector,
                 )
