@@ -14,7 +14,8 @@ This helps because:
 
 from typing import List, Dict
 import numpy as np
-from sentence_transformers import CrossEncoder
+# Import CrossEncoder only when needed to avoid slow startup
+# from sentence_transformers import CrossEncoder
 
 
 class Reranker:
@@ -32,8 +33,39 @@ class Reranker:
         Args:
             model_name: HuggingFace model name for cross-encoder
         """
-        self.model = CrossEncoder(model_name, max_length=512)
         self.model_name = model_name
+        self.model = None  # Lazy load to avoid slow startup
+        self._load_error = None
+    
+    def _ensure_model_loaded(self):
+        """Lazy load the model only when needed."""
+        if self.model is None and self._load_error is None:
+            try:
+                import warnings
+                import logging
+                import os
+                
+                # Suppress PyTorch warnings during model loading
+                warnings.filterwarnings("ignore")
+                os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Suppress tokenizer warnings
+                logging.getLogger("transformers").setLevel(logging.ERROR)
+                logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+                
+                # Import here to avoid slow startup
+                from sentence_transformers import CrossEncoder
+                
+                print(f"Loading reranker model {self.model_name}... (this may take a minute on first use)")
+                self.model = CrossEncoder(self.model_name, max_length=512)
+                print("Reranker model loaded successfully.")
+            except Exception as e:
+                self._load_error = str(e)
+                raise RuntimeError(
+                    f"Failed to load reranker model {self.model_name}: {e}\n"
+                    "This may be due to network issues or missing dependencies.\n"
+                    "Try disabling reranking in the UI settings."
+                ) from e
+        elif self._load_error:
+            raise RuntimeError(f"Reranker model failed to load: {self._load_error}")
     
     def rerank(
         self,
@@ -54,6 +86,9 @@ class Reranker:
         """
         if not chunks:
             return []
+        
+        # Lazy load model on first use
+        self._ensure_model_loaded()
         
         # Prepare query-chunk pairs for cross-encoder
         pairs = [(query, chunk.get("chunk_text", "")) for chunk in chunks]

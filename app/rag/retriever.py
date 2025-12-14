@@ -1,23 +1,24 @@
 from typing import List, Dict
+import os
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import weaviate
 
 from app.config import config
 from app.ingestion.index_weaviate import get_weaviate_client
+from app.ingestion.embeddings import get_openai_embeddings
 
 
 class Retriever:
     def __init__(self, client: weaviate.WeaviateClient | None = None):
         self.client = client or get_weaviate_client()
         self.collection = self.client.collections.get(config.weaviate.class_name)
-        self.model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+        self.embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
     def retrieve(self, query: str, top_k: int = 5) -> List[Dict]:
-        query_vec = self.model.encode([query], convert_to_numpy=True)[0].astype(
-            np.float32
-        )
+        # Get embedding from OpenAI API
+        query_embeddings = get_openai_embeddings([query], model=self.embedding_model)
+        query_vec = query_embeddings[0].astype(np.float32)
         results = self.collection.query.near_vector(
             near_vector=query_vec.tolist(),
             limit=top_k,

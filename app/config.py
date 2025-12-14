@@ -1,17 +1,44 @@
 # app/config.py
 import os
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
-load_dotenv("E:/YTReusable/.env",override=True)
+# Load .env from project root (works both locally and on EC2)
+# Try multiple paths to find .env file
+possible_roots = [
+    Path(__file__).parent.parent.parent,  # From app/config.py -> project root
+    Path.cwd(),  # Current working directory
+]
+
+env_path = None
+for root in possible_roots:
+    candidate = root / ".env"
+    if candidate.exists():
+        env_path = candidate
+        break
+
+if env_path is None:
+    # Try current directory as last resort
+    env_path = Path(".env")
+
+# Load the .env file
+if env_path.exists():
+    result = load_dotenv(env_path, override=True)
+    if not result:
+        import sys
+        print(f"Warning: .env file exists at {env_path} but load_dotenv returned False. Check file format.", file=sys.stderr)
+else:
+    import sys
+    print(f"Warning: .env file not found. Tried: {[str(r / '.env') for r in possible_roots]}", file=sys.stderr)
 
 
 @dataclass
 class DatasetConfig:
     hf_name: str = "scientific_papers"
     hf_config: str = "arxiv"
-    max_papers: int = 50  # tweak for cost/runtime
+    max_papers: int = 5  # tweak for cost/runtime
 
 
 @dataclass
@@ -24,10 +51,11 @@ class ChunkingConfig:
 @dataclass
 class WeaviateConfig:
     # For Cloud, this must be your REST endpoint URL
-    url: str = os.getenv("WEAVIATE_URL", "")
-    api_key: str | None = os.getenv("WEAVIATE_API_KEY")
+    # Note: os.getenv() is called at class definition time, after load_dotenv above
+    url: str = os.getenv("WEAVIATE_URL", "") or ""
+    api_key: str | None = os.getenv("WEAVIATE_API_KEY") or None
     class_name: str = "PaperChunk"
-    vector_dim: int = 768  # all-mpnet-base-v2
+    vector_dim: int = 1536  # text-embedding-3-small
     batch_size: int = 32
 
 

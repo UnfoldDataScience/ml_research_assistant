@@ -2,8 +2,17 @@
 Build the initial Weaviate index from the arxiv dataset.
 
 Usage:
-    uv run scripts/build_index.py
+    python scripts/build_index.py
+    (Must be run from project root directory)
 """
+
+import sys
+from pathlib import Path
+
+# Add project root to Python path so we can import 'app'
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from app.data.load_arxiv import load_arxiv_papers
 from app.ingestion.chunking import chunk_papers
@@ -27,7 +36,7 @@ def main():
     
     # For large datasets, process in batches to avoid memory issues
     # Process papers in batches of 50 to keep memory usage manageable
-    batch_size = 50
+    batch_size = 5
     all_chunks = []
     
     for i in range(0, len(papers), batch_size):

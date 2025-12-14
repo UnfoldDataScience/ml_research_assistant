@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Add project root to Python path so we can import 'app'
+project_root = Path(__file__).resolve().parents[2]  # app/ui/streamlit_app.py -> project root
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import streamlit as st
 import pandas as pd
 
@@ -36,13 +44,13 @@ def render_sidebar():
     
     use_reranking = st.sidebar.checkbox(
         "Enable Reranking",
-        value=True,
-        help="Use cross-encoder to rerank results for better precision"
+        value=False,  # Disabled by default - requires model download
+        help="Use cross-encoder to rerank results for better precision. Note: First use will download a model (~100MB) and may be slow."
     )
     
     use_evaluation = st.sidebar.checkbox(
         "Enable Evaluation",
-        value=True,
+        value=False,  # Disabled by default for faster responses
         help="Calculate RAG evaluation metrics (Precision, Recall, MRR, NDCG, F1)"
     )
     
@@ -272,14 +280,41 @@ def main():
         if not query.strip():
             st.warning("Please enter a question.")
         else:
-            with st.spinner("🔍 Retrieving, reranking, and generating answer..."):
-                result = pipeline.answer_query(
-                    query,
-                    top_k=top_k,
-                    use_reranking=use_reranking,
-                    use_evaluation=use_evaluation,
-                )
-                st.session_state["last_result"] = result
+            # Show appropriate spinner message
+            spinner_msg = "🔍 Retrieving and generating answer..."
+            if use_reranking:
+                spinner_msg = "🔍 Retrieving, reranking, and generating answer... (reranking may take 30-60s on first use)"
+            elif use_evaluation:
+                spinner_msg = "🔍 Retrieving, evaluating, and generating answer..."
+            
+            with st.spinner(spinner_msg):
+                try:
+                    result = pipeline.answer_query(
+                        query,
+                        top_k=top_k,
+                        use_reranking=use_reranking,
+                        use_evaluation=use_evaluation,
+                    )
+                    st.session_state["last_result"] = result
+                except RuntimeError as e:
+                    if "reranker" in str(e).lower() or "rerank" in str(e).lower():
+                        st.error(f"⚠️ Reranking failed: {str(e)}\n\n**Tip:** Try disabling reranking in the sidebar settings for faster responses.")
+                        # Fall back to non-reranked result
+                        try:
+                            result = pipeline.answer_query(
+                                query,
+                                top_k=top_k,
+                                use_reranking=False,
+                                use_evaluation=use_evaluation,
+                            )
+                            st.session_state["last_result"] = result
+                            st.info("✅ Showing results without reranking.")
+                        except Exception as e2:
+                            st.error(f"Error: {e2}")
+                    else:
+                        st.error(f"Error: {e}")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
 
     result = st.session_state.get("last_result")
     if not result:

@@ -29,7 +29,8 @@ class RAGPipeline:
     ):
         self.retriever = retriever or Retriever()
         self.llm = llm_client or LLMClient()
-        self.reranker = reranker or Reranker() if use_reranking else None
+        # Don't create reranker unless explicitly needed - lazy load later
+        self.reranker = reranker if reranker is not None else (Reranker() if use_reranking else None)
         self.use_reranking = use_reranking
         self.use_evaluation = use_evaluation
 
@@ -67,8 +68,15 @@ class RAGPipeline:
             if self.reranker is None:
                 from app.rag.reranker import Reranker
                 self.reranker = Reranker()
-            reranking_comparison = self.reranker.compare_retrieval(query, original_contexts, top_k=top_k)
-            contexts = reranking_comparison["reranked"]
+            try:
+                reranking_comparison = self.reranker.compare_retrieval(query, original_contexts, top_k=top_k)
+                contexts = reranking_comparison["reranked"]
+            except RuntimeError as e:
+                # If reranker fails to load, fall back to original retrieval
+                print(f"Warning: Reranking failed: {e}")
+                print("Falling back to original retrieval results.")
+                reranking_comparison = None
+                contexts = original_contexts
         
         # Generate answer
         answer = self.llm.generate_answer(query, contexts[:top_k])

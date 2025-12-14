@@ -1,14 +1,15 @@
 # app/ingestion/index_weaviate.py
 
 from typing import List, Dict
+import os
 
 import weaviate
 from weaviate.classes.config import Configure, Property, DataType
 from weaviate.classes.init import Auth
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from app.config import config
+from app.ingestion.embeddings import get_openai_embeddings
 
 
 def get_weaviate_client() -> weaviate.WeaviateClient:
@@ -44,19 +45,37 @@ def ensure_schema(client: weaviate.WeaviateClient) -> None:
 
     print(f"Creating collection {class_name} on Weaviate Cloud...")
 
-    client.collections.create(
-        name=class_name,
-        vector_config=Configure.Vectors.self_provided(),  # using our own vectors
-        properties=[
-            Property(name="paper_id", data_type=DataType.TEXT),
-            Property(name="title", data_type=DataType.TEXT),
-            Property(name="abstract", data_type=DataType.TEXT),
-            Property(name="chunk_text", data_type=DataType.TEXT),
-            Property(name="start_token", data_type=DataType.INT),
-            Property(name="end_token", data_type=DataType.INT),
-            Property(name="chunking_strategy", data_type=DataType.TEXT),
-        ],
-    )
+    # For Weaviate 4.6.3, use vectorizer_config=None for self-provided vectors
+    # Try the newer API first, fall back to older API if needed
+    try:
+        # Try newer API (4.7+)
+        client.collections.create(
+            name=class_name,
+            vector_config=Configure.Vectors.self_provided(),
+            properties=[
+                Property(name="paper_id", data_type=DataType.TEXT),
+                Property(name="title", data_type=DataType.TEXT),
+                Property(name="abstract", data_type=DataType.TEXT),
+                Property(name="chunk_text", data_type=DataType.TEXT),
+                Property(name="start_token", data_type=DataType.INT),
+                Property(name="end_token", data_type=DataType.INT),
+                Property(name="chunking_strategy", data_type=DataType.TEXT),
+            ],
+        )
+    except AttributeError:
+        # Fall back to older API (4.6.3) - omit vector_config (self-provided is default)
+        client.collections.create(
+            name=class_name,
+            properties=[
+                Property(name="paper_id", data_type=DataType.TEXT),
+                Property(name="title", data_type=DataType.TEXT),
+                Property(name="abstract", data_type=DataType.TEXT),
+                Property(name="chunk_text", data_type=DataType.TEXT),
+                Property(name="start_token", data_type=DataType.INT),
+                Property(name="end_token", data_type=DataType.INT),
+                Property(name="chunking_strategy", data_type=DataType.TEXT),
+            ],
+        )
 
     print("Schema created.")
 
@@ -71,8 +90,8 @@ def index_chunks(
     w_conf = config.weaviate
     collection = client.collections.get(w_conf.class_name)
 
-    print("Loading embedding model (all-mpnet-base-v2)...")
-    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+    print("Using OpenAI embeddings (text-embedding-3-small)...")
+    embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
     batch_size = w_conf.batch_size
     total = len(chunks)
@@ -81,7 +100,7 @@ def index_chunks(
     for i in tqdm(range(0, total, batch_size)):
         batch = chunks[i : i + batch_size]
         texts = [c["chunk_text"] for c in batch]
-        vectors = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+        vectors = get_openai_embeddings(texts, model=embedding_model)
 
         with collection.batch.dynamic() as batcher:
             for chunk, vector in zip(batch, vectors):
